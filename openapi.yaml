@@ -1,0 +1,212 @@
+openapi: 3.1.0
+info:
+  # Do not change the title, if the title changes, the import paths will be broken
+  title: Api
+  version: 0.1.0
+  description: API specification
+servers:
+  - url: /api
+    description: Base API path
+tags:
+  - name: health
+    description: Health operations
+  - name: games
+    description: Game rooms and cooperative play
+paths:
+  /healthz:
+    get:
+      operationId: healthCheck
+      tags: [health]
+      summary: Health check
+      description: Returns server health status
+      responses:
+        "200":
+          description: Healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+  /games/rooms:
+    post:
+      operationId: createGameRoom
+      tags: [games]
+      summary: Create a cooperative room
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateGameRoomInput"
+      responses:
+        "201":
+          description: Created room
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GameRoomEnvelope"
+  /games/rooms/{code}/join:
+    post:
+      operationId: joinGameRoom
+      tags: [games]
+      parameters:
+        - name: code
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/JoinGameRoomInput"
+      responses:
+        "200":
+          description: Joined room
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GameRoomEnvelope"
+  /games/rooms/{code}:
+    get:
+      operationId: getGameRoom
+      tags: [games]
+      parameters:
+        - name: code
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Current room state and team messages
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GameRoomEnvelope"
+  /games/rooms/{code}/state:
+    put:
+      operationId: updateGameRoomState
+      tags: [games]
+      parameters:
+        - name: code
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateGameRoomStateInput"
+      responses:
+        "200":
+          description: Updated room state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GameRoomEnvelope"
+        "409":
+          description: Room state changed; reload before retrying
+  /games/rooms/{code}/messages:
+    post:
+      operationId: sendGameRoomMessage
+      tags: [games]
+      parameters:
+        - name: code
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SendGameRoomMessageInput"
+      responses:
+        "201":
+          description: Sent team-only message
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GameRoomEnvelope"
+components:
+  schemas:
+    HealthStatus:
+      type: object
+      properties:
+        status:
+          type: string
+      required:
+        - status
+    GameMode:
+      type: string
+      enum: [coop]
+    GameRole:
+      type: string
+      enum: [assault, scout, hacker, medic, engineer, commander]
+    GameRoomPlayer:
+      type: object
+      properties:
+        id: { type: string }
+        name: { type: string }
+        role: { $ref: "#/components/schemas/GameRole" }
+        joinedAt: { type: string, format: date-time }
+      required: [id, name, role, joinedAt]
+    GameRoom:
+      type: object
+      properties:
+        code: { type: string }
+        mode: { $ref: "#/components/schemas/GameMode" }
+        players:
+          type: array
+          items: { $ref: "#/components/schemas/GameRoomPlayer" }
+        status:
+          type: string
+          enum: [waiting, active]
+        version: { type: integer }
+        snapshot: { type: ["string", "null"] }
+        updatedAt: { type: string, format: date-time }
+      required: [code, mode, players, status, version, snapshot, updatedAt]
+    GameRoomMessage:
+      type: object
+      properties:
+        id: { type: string }
+        senderId: { type: string }
+        senderName: { type: string }
+        body: { type: string }
+        sentAt: { type: string, format: date-time }
+      required: [id, senderId, senderName, body, sentAt]
+    GameRoomEnvelope:
+      type: object
+      properties:
+        room: { $ref: "#/components/schemas/GameRoom" }
+        playerId: { type: string }
+        messages:
+          type: array
+          items: { $ref: "#/components/schemas/GameRoomMessage" }
+      required: [room, playerId, messages]
+    CreateGameRoomInput:
+      type: object
+      properties:
+        name: { type: string, minLength: 1, maxLength: 24 }
+        role: { $ref: "#/components/schemas/GameRole" }
+      required: [name, role]
+    JoinGameRoomInput:
+      type: object
+      properties:
+        name: { type: string, minLength: 1, maxLength: 24 }
+        role: { $ref: "#/components/schemas/GameRole" }
+      required: [name, role]
+    UpdateGameRoomStateInput:
+      type: object
+      properties:
+        playerId: { type: string }
+        expectedVersion: { type: integer, minimum: 0 }
+        snapshot: { type: string, maxLength: 100000 }
+      required: [playerId, expectedVersion, snapshot]
+    SendGameRoomMessageInput:
+      type: object
+      properties:
+        playerId: { type: string }
+        body: { type: string, minLength: 1, maxLength: 400 }
+      required: [playerId, body]
+
